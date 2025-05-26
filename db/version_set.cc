@@ -71,12 +71,14 @@
 #include "table/two_level_iterator.h"
 #include "table/unique_id_impl.h"
 #include "test_util/sync_point.h"
+#include "table/block_based/block_based_table_reader.h"
 #include "util/cast_util.h"
 #include "util/coding.h"
 #include "util/coro_utils.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/user_comparator_wrapper.h"
+#include <iostream>
 
 // Generate the regular and coroutine versions of some methods by
 // including version_set_sync_and_async.h twice
@@ -7608,6 +7610,59 @@ Status ReactiveVersionSet::MaybeSwitchManifest(
   return s;
 }
 
+void MaybeWarmupBlockCacheForEvictedRange(Version* current_version,
+                                           const InternalKey& smallest,
+                                           const InternalKey& largest,
+                                           TableCache* table_cache,
+                                           const ReadOptions& base_read_options,
+                                           const InternalKeyComparator& icmp,
+                                           const EnvOptions& env_options,
+                                           Logger* info_log) {
+    std::cout << "[Warmup] Start warm-up for evicted range [" 
+          << smallest.DebugString() << ", " 
+          << largest.DebugString() << "]" << std::endl;
+
+    for (int level = 0; level < current_version->NumberLevels(); ++level) {
+        const auto& files = current_version->files_[level];
+        for (auto* f : files) {
+            if (icmp.Compare(f->largest, smallest) < 0 || icmp.Compare(f->smallest, largest) > 0) {
+                continue; // 범위 겹치지 않음
+            }
+
+            FileDescriptor fd = f->fd;
+            TableReader* table_reader = nullptr;
+            Status s = table_cache->FindTable(base_read_options,
+                                              fd.GetNumber(),
+                                              fd.GetFileSize(),
+                                              f->smallest.user_key().ToString(),
+                                              &table_reader,
+                                              nullptr);
+            if (!s.ok() || table_reader == nullptr) {
+                ROCKS_LOG_WARN(info_log, "[Warmup] Failed to load table reader for file #%lu", fd.GetNumber());
+                continue;
+            }
+
+            ReadOptions ro = base_read_options;
+            ro.fill_cache = true;
+            std::unique_ptr<InternalIterator> iter(table_reader->NewIterator(ro));
+
+            size_t count = 0;
+            for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
+                const Slice& ikey = iter->key();
+                if (icmp.Compare(InternalKey(ikey, kTypeValue), smallest) >= 0 &&
+                    icmp.Compare(InternalKey(ikey, kTypeValue), largest) <= 0) {
+                    ++count;
+                    continue; // blockcache에 올라감
+                }
+            }
+            ROCKS_LOG_INFO(info_log, "[Warmup] Warmed %zu entries from L%d file #%lu", count, level, fd.GetNumber());
+        }
+    }
+    ROCKS_LOG_INFO(info_log, "[Warmup] Completed warm-up for range");
+}
+
+
+
 #ifndef NDEBUG
 uint64_t ReactiveVersionSet::TEST_read_edits_in_atomic_group() const {
   assert(manifest_tailer_);
@@ -7621,3 +7676,5 @@ std::vector<VersionEdit>& ReactiveVersionSet::replay_buffer() {
 }
 
 }  // namespace ROCKSDB_NAMESPACE
+   //
+   //

@@ -143,10 +143,13 @@ class SubcompactionState;
 class CompactionJob {
  public:
   CompactionJob(int job_id, Compaction* compaction,
-                const ImmutableDBOptions& db_options,
+		const DBOptions& db_options,
+                const ImmutableDBOptions& immutable_db_options,
                 const MutableDBOptions& mutable_db_options,
                 const FileOptions& file_options, VersionSet* versions,
-                const std::atomic<bool>* shutting_down, LogBuffer* log_buffer,
+                const std::atomic<bool>* shutting_down,
+		const EnvOptions& env_options,
+		LogBuffer* log_buffer,
                 FSDirectory* db_directory, FSDirectory* output_directory,
                 FSDirectory* blob_output_directory, Statistics* stats,
                 InstrumentedMutex* db_mutex, ErrorHandler* db_error_handler,
@@ -157,6 +160,7 @@ class CompactionJob {
                 Env::Priority thread_pri,
                 const std::shared_ptr<IOTracer>& io_tracer,
                 const std::atomic<bool>& manual_compaction_canceled,
+		const ImmutableCFOptions& immutable_cf_options,
                 const std::string& db_id = "",
                 const std::string& db_session_id = "",
                 std::string full_history_ts_low = "", std::string trim_ts = "",
@@ -208,7 +212,8 @@ class CompactionJob {
 
   CompactionState* compact_;
   InternalStats::CompactionStatsFull internal_stats_;
-  const ImmutableDBOptions& db_options_;
+  const DBOptions& db_options_;
+  const ImmutableDBOptions& immutable_db_options_;
   const MutableDBOptions mutable_db_options_copy_;
   LogBuffer* log_buffer_;
   FSDirectory* output_directory_;
@@ -223,8 +228,14 @@ class CompactionJob {
   CompactionJobStats* job_stats_;
 
  private:
+  const DBOptions& db_options_;
+  const immutableDBOptions& immutable_db_options_;
+  const std::atomi<bool>& mannual_compaction_calceled_;
   friend class CompactionJobTestBase;
-
+  ColumnFamilyData* cfd_;
+  EnvOptions env_options_;
+  ImmutableCFOptions immutable_cf_options_;
+  std::shared_ptr<Cache> block_cache;
   // Collect the following stats from Input Table Properties
   // - num_input_files_in_non_output_levels
   // - num_input_files_in_output_level

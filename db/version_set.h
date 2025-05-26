@@ -1741,6 +1741,18 @@ class VersionSet {
   bool closed_;
 };
 
+// warm-up 함수 선언
+void MaybeWarmupBlockCacheForEvictedRange(
+    Version* current_version,
+    const InternalKey& smallest,
+    const InternalKey& largest,
+    std::shared_ptr<Cache> block_cache,
+    const ReadOptions& base_read_options,
+    const InternalKeyComparator& icmp,
+    const EnvOptions& env_options,
+    Logger* info_log);
+
+
 // ReactiveVersionSet represents a collection of versions of the column
 // families of the database. Users of ReactiveVersionSet, e.g. DBImplSecondary,
 // need to replay the MANIFEST (description log in older terms) in order to

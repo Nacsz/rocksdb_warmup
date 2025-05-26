@@ -19,6 +19,7 @@
 #include "rocksdb/sst_partitioner.h"
 #include "test_util/sync_point.h"
 #include "util/string_util.h"
+extern bool FLAGS_warmup_after_evict;
 
 namespace ROCKSDB_NAMESPACE {
 

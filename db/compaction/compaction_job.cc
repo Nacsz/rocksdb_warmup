@@ -56,6 +56,7 @@
 #include "table/unique_id_impl.h"
 #include "test_util/sync_point.h"
 #include "util/stop_watch.h"
+extern bool FLAGS_warmup_after_evict;
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -127,9 +128,11 @@ const char* GetCompactionProximalOutputRangeTypeString(
 }
 
 CompactionJob::CompactionJob(
-    int job_id, Compaction* compaction, const ImmutableDBOptions& db_options,
+    int job_id, Compaction* compaction, const DBOptions& db_options, 
+    const ImmutableDBOptions& immutable_db_options,
     const MutableDBOptions& mutable_db_options, const FileOptions& file_options,
     VersionSet* versions, const std::atomic<bool>* shutting_down,
+    const EnvOptions& env_options,
     LogBuffer* log_buffer, FSDirectory* db_directory,
     FSDirectory* output_directory, FSDirectory* blob_output_directory,
     Statistics* stats, InstrumentedMutex* db_mutex,
@@ -139,12 +142,22 @@ CompactionJob::CompactionJob(
     CompactionJobStats* compaction_job_stats, Env::Priority thread_pri,
     const std::shared_ptr<IOTracer>& io_tracer,
     const std::atomic<bool>& manual_compaction_canceled,
+    const ImmutableCFOptions& immutable_cf_options,
     const std::string& db_id, const std::string& db_session_id,
     std::string full_history_ts_low, std::string trim_ts,
     BlobFileCompletionCallback* blob_callback, int* bg_compaction_scheduled,
     int* bg_bottom_compaction_scheduled)
-    : compact_(new CompactionState(compaction)),
+    :
+      db_options_(db_options),
+      immutable_db_options_(immutable_db_options),
+      dbname_(dbname),
+      manual_compaction_canceled_(manual_compaction_canceled),
+      compact_(new CompactionState(compaction)),
+      env_options_(env_options),
       internal_stats_(compaction->compaction_reason(), 1),
+      immutable_cf_options_(immutable_cf_options),
+      block_cache(db_options.block_cache)
+      fs_(db_options.fs, io_tracer),
       db_options_(db_options),
       mutable_db_options_copy_(mutable_db_options),
       log_buffer_(log_buffer),
@@ -1626,6 +1639,7 @@ void CompactionJob::RecordDroppedKeys(
 }
 
 Status CompactionJob::FinishCompactionOutputFile(
+
     const Status& input_status, SubcompactionState* sub_compact,
     CompactionOutputs& outputs, const Slice& next_table_min_key,
     const Slice* comp_start_user_key, const Slice* comp_end_user_key) {
@@ -1903,6 +1917,41 @@ Status CompactionJob::InstallCompactionResults(bool* compaction_released) {
                                 /*new_descriptor_log=*/false,
                                 /*column_family_options=*/nullptr,
                                 manifest_wcb);
+
+
+ReadOptions warmup_read_options;
+warmup_read_options.fill_cache = true;
+
+if (FLAGS_warmup_after_evict) {
+  auto* current_version = cfd_->current();
+  auto* storage_info = current_version->storage_info();
+
+  for (const auto& f : edit->GetDeletedFiles()) {
+    int level = f.first;
+    uint64_t file_number = f.second;
+
+    const auto& files = storage_info->LevelFiles(level);
+    for (auto* file : files) {
+      if (file->fd.GetNumber() == file_number) {
+        const InternalKey& smallest = file->smallest;
+        const InternalKey& largest = file->largest;
+
+        MaybeWarmupBlockCacheForEvictedRange(
+          current_version,
+          smallest,
+          largest,
+          block_cache,
+          warmup_read_options,
+          cfd_->internal_comparator(),
+          env_options_,
+          db_options_.info_log.get());
+        break;
+      }
+    }
+  }
+}
+
+
 }
 
 void CompactionJob::RecordCompactionIOStats() {
