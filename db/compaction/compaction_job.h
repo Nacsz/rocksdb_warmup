@@ -145,6 +145,7 @@ class CompactionJob {
   CompactionJob(int job_id, Compaction* compaction,
 		const DBOptions& db_options,
                 const ImmutableDBOptions& immutable_db_options,
+		std::shared_ptr<Cache> block_cache,
                 const MutableDBOptions& mutable_db_options,
                 const FileOptions& file_options, VersionSet* versions,
                 const std::atomic<bool>* shutting_down,
@@ -212,8 +213,6 @@ class CompactionJob {
 
   CompactionState* compact_;
   InternalStats::CompactionStatsFull internal_stats_;
-  const DBOptions& db_options_;
-  const ImmutableDBOptions& immutable_db_options_;
   const MutableDBOptions mutable_db_options_copy_;
   LogBuffer* log_buffer_;
   FSDirectory* output_directory_;
@@ -229,12 +228,22 @@ class CompactionJob {
 
  private:
   const DBOptions& db_options_;
-  const immutableDBOptions& immutable_db_options_;
-  const std::atomi<bool>& mannual_compaction_calceled_;
+  const ImmutableDBOptions& immutable_db_options_;
+  std::shared_ptr<Cache> block_cache_;
+  const std::atomic<bool>& manual_compaction_calceled_;
   friend class CompactionJobTestBase;
   ColumnFamilyData* cfd_;
   EnvOptions env_options_;
+  
   ImmutableCFOptions immutable_cf_options_;
+  
+  FileSystemPtr fs_;
+
+
+ 
+ 
+ 
+
   std::shared_ptr<Cache> block_cache;
   // Collect the following stats from Input Table Properties
   // - num_input_files_in_non_output_levels
@@ -322,7 +331,6 @@ class CompactionJob {
 
   Env* env_;
   std::shared_ptr<IOTracer> io_tracer_;
-  FileSystemPtr fs_;
   // env_option optimized for compaction table reads
   FileOptions file_options_for_read_;
   VersionSet* versions_;
@@ -498,7 +506,6 @@ struct CompactionServiceResult {
 
   // Per-level Compaction Stats for both output_level_stats and
   // proximal_level_stats
-  InternalStats::CompactionStatsFull internal_stats;
 
   // serialization interface to read and write the object
   static Status Read(const std::string& data_str, CompactionServiceResult* obj);

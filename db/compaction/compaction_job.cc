@@ -129,7 +129,7 @@ const char* GetCompactionProximalOutputRangeTypeString(
 
 CompactionJob::CompactionJob(
     int job_id, Compaction* compaction, const DBOptions& db_options, 
-    const ImmutableDBOptions& immutable_db_options,
+    const ImmutableDBOptions& immutable_db_options, std::shared_ptr<Cache> input_block_cache,
     const MutableDBOptions& mutable_db_options, const FileOptions& file_options,
     VersionSet* versions, const std::atomic<bool>* shutting_down,
     const EnvOptions& env_options,
@@ -148,17 +148,8 @@ CompactionJob::CompactionJob(
     BlobFileCompletionCallback* blob_callback, int* bg_compaction_scheduled,
     int* bg_bottom_compaction_scheduled)
     :
-      db_options_(db_options),
-      immutable_db_options_(immutable_db_options),
-      dbname_(dbname),
-      manual_compaction_canceled_(manual_compaction_canceled),
       compact_(new CompactionState(compaction)),
-      env_options_(env_options),
       internal_stats_(compaction->compaction_reason(), 1),
-      immutable_cf_options_(immutable_cf_options),
-      block_cache(db_options.block_cache)
-      fs_(db_options.fs, io_tracer),
-      db_options_(db_options),
       mutable_db_options_copy_(mutable_db_options),
       log_buffer_(log_buffer),
       output_directory_(output_directory),
@@ -166,6 +157,11 @@ CompactionJob::CompactionJob(
       bottommost_level_(false),
       write_hint_(Env::WLTH_NOT_SET),
       job_stats_(compaction_job_stats),
+      db_options_(db_options),
+      immutable_db_options_(immutable_db_options),
+      block_cache_(input_block_cache),
+      env_options_(env_options),
+      immutable_cf_options_(immutable_cf_options),
       job_id_(job_id),
       dbname_(dbname),
       db_id_(db_id),
@@ -173,9 +169,8 @@ CompactionJob::CompactionJob(
       file_options_(file_options),
       env_(db_options.env),
       io_tracer_(io_tracer),
-      fs_(db_options.fs, io_tracer),
       file_options_for_read_(
-          fs_->OptimizeForCompactionTableRead(file_options, db_options_)),
+          fs_->OptimizeForCompactionTableRead(file_options, immutable_db_options_)),
       versions_(versions),
       shutting_down_(shutting_down),
       manual_compaction_canceled_(manual_compaction_canceled),
