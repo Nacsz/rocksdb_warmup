@@ -1,4 +1,4 @@
-//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
+bl//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under both the GPLv2 (found in the
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
@@ -169,10 +169,10 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
                const bool seq_per_batch, const bool batch_per_txn,
                bool read_only)
     : 
+      listeners_copy(options.listeners),
       blob_callback_(immutable_db_options_.sst_file_manager.get(), &mutex_,
                      &error_handler_, &event_logger_,
-                     immutable_db_options_.listeners, dbname_),
-
+                     listeners_copy, dbname_),
       block_cache_(options.row_cache),
       env_options_(EnvOptions(options)), 
       db_options_(options),
@@ -186,7 +186,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       fs_(immutable_db_options_.fs, io_tracer_),
       mutable_db_options_(initial_db_options_),
       stats_(immutable_db_options_.stats),
-      
+
 #ifdef COERCE_CONTEXT_SWITCH
       mutex_(stats_, immutable_db_options_.clock, DB_MUTEX_WAIT_MICROS, &bg_cv_,
              immutable_db_options_.use_adaptive_mutex),
@@ -232,9 +232,12 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
     
      
    
-      atomic_flush_install_cv_(&mutex_)
+      atomic_flush_install_cv_(&mutex_),
 
  {
+
+
+
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);

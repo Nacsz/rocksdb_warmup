@@ -3282,6 +3282,7 @@ class Benchmark {
     }
     if (!FLAGS_use_existing_db) {
       Options options;
+      options.listeners = std::vector<std::shared_ptr<rocksdb::EventListener>>{};
       options.env = FLAGS_env;
       if (!FLAGS_wal_dir.empty()) {
         options.wal_dir = FLAGS_wal_dir;

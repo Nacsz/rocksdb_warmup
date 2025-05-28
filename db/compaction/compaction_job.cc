@@ -943,6 +943,7 @@ Status CompactionJob::Install(bool* compaction_released) {
                                             internal_stats_);
 
   if (status.ok()) {
+    ROCKS_LOG_INFO(db_options_.info_log.get(), "[WARMUP DEBUG] Entering InstallCompactionResults");
     status = InstallCompactionResults(compaction_released);
   }
   if (!versions_->io_status().ok()) {
@@ -1933,6 +1934,9 @@ if (FLAGS_warmup_after_evict) {
       if (file->fd.GetNumber() == file_number) {
         const InternalKey& smallest = file->smallest;
         const InternalKey& largest = file->largest;
+        ROCKS_LOG_INFO(db_options_.info_log.get(), "[WARMUP DEBUG] About to call warmup with range %s ~ %s",
+               smallest.DebugString(true).c_str(),
+               largest.DebugString(true).c_str());
 
         MaybeWarmupBlockCacheForEvictedRange(
           current_version,
@@ -1952,7 +1956,7 @@ if (FLAGS_warmup_after_evict) {
   }
 }
 
-
+return Status::OK();
 }
 
 void CompactionJob::RecordCompactionIOStats() {

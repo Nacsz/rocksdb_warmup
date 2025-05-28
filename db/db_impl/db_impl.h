@@ -1357,7 +1357,8 @@ class DBImpl : public DB {
   bool seq_per_batch() const { return seq_per_batch_; }
 
  protected:
-  BlobFileCompletionCallback blob_callback_;
+  std::vector<std::shared_ptr<EventListener>> listeners_copy;
+  std::unique_ptr<BlobFileCompletionCallback> blob_callback_;
   int bg_compaction_scheduled_ = 0;
   int bg_bottom_compaction_scheduled_ = 0;
   std::shared_ptr<Cache> block_cache_; 
@@ -1385,7 +1386,6 @@ class DBImpl : public DB {
   std::unique_ptr<Tracer> tracer_;
   InstrumentedMutex trace_mutex_;
   BlockCacheTracer block_cache_tracer_;
-
   // constant false canceled flag, used when the compaction is not manual
   const std::atomic<bool> kManualCompactionCanceledFalse_{false};
 

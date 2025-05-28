@@ -2400,6 +2400,11 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   assert(handles);
   handles->clear();
 
+  DBOptions fixed_db_options = db_options;
+  if (fixed_db_options.listeners.empty()) {
+    fixed_db_options.listeners = std::vector<std::shared_ptr<EventListener>>{};
+  }
+
   size_t max_write_buffer_size = 0;
   MinAndMaxPreserveSeconds preserve_info;
   for (const auto& cf : column_families) {

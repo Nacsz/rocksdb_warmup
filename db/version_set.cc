@@ -19,7 +19,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-
+#include <fstream>
 #include "db/blob/blob_fetcher.h"
 #include "db/blob/blob_file_cache.h"
 #include "db/blob/blob_file_reader.h"
@@ -7620,14 +7620,23 @@ void MaybeWarmupBlockCacheForEvictedRange(Version* current_version,
                                            Logger* info_log,
 					   const FileOptions& file_options,
 					   const MutableCFOptions& mutable_cf_options) {
-   
+   assert(false && "[WARMUP] warmup 함수 진입 확인용 assert");
+
     (void)env_options;
     TableCache::TypedHandle* handle = nullptr; 
     Arena arena;
     std::cout << "[WARMUP] smallest: " << smallest.DebugString(false, nullptr) << std::endl; 
     std::cout << "[WARMUP] largest: " << largest.DebugString(false, nullptr) << std::endl;
     std::cout << "[WARMUP] comparison result: " << icmp.Compare(largest, smallest) << std::endl;
+  
+   assert(info_log != nullptr);
+     std::ofstream warmup_log("/tmp/warmup_log.txt", std::ios::app);
 
+     warmup_log << "[WARMUP] Start warmup for evicted range: ["
+                << smallest.DebugString(false, nullptr) << " ~ "
+                << largest.DebugString(false, nullptr) << "]\n";
+
+     warmup_log.close();
     ROCKS_LOG_INFO(info_log,
                "[WARMUP] Start warmup for evicted range: [%s] ~ [%s]",
                smallest.DebugString(true).c_str(),
