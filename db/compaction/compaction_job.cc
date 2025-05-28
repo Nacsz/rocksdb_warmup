@@ -143,11 +143,15 @@ CompactionJob::CompactionJob(
     const std::shared_ptr<IOTracer>& io_tracer,
     const std::atomic<bool>& manual_compaction_canceled,
     const ImmutableCFOptions& immutable_cf_options,
+    const MutableCFOptions& mutable_cf_options,
     const std::string& db_id, const std::string& db_session_id,
     std::string full_history_ts_low, std::string trim_ts,
     BlobFileCompletionCallback* blob_callback, int* bg_compaction_scheduled,
     int* bg_bottom_compaction_scheduled)
     :
+      mutable_cf_options_(mutable_cf_options),
+      db_options_(db_options),
+      immutable_db_options_(immutable_db_options),
       compact_(new CompactionState(compaction)),
       internal_stats_(compaction->compaction_reason(), 1),
       mutable_db_options_copy_(mutable_db_options),
@@ -157,11 +161,10 @@ CompactionJob::CompactionJob(
       bottommost_level_(false),
       write_hint_(Env::WLTH_NOT_SET),
       job_stats_(compaction_job_stats),
-      db_options_(db_options),
-      immutable_db_options_(immutable_db_options),
       block_cache_(input_block_cache),
       env_options_(env_options),
       immutable_cf_options_(immutable_cf_options),
+      fs_(immutable_db_options.fs, io_tracer),
       job_id_(job_id),
       dbname_(dbname),
       db_id_(db_id),
@@ -265,7 +268,7 @@ void CompactionJob::Prepare(
   bottommost_level_ = c->bottommost_level();
 
   if (!known_single_subcompact.has_value() && c->ShouldFormSubcompactions()) {
-    StopWatch sw(db_options_.clock, stats_, SUBCOMPACTION_SETUP_TIME);
+    StopWatch sw(immutable_db_options_.clock, stats_, SUBCOMPACTION_SETUP_TIME);
     GenSubcompactionBoundaries();
   }
   if (boundaries_.size() >= 1) {
@@ -326,7 +329,7 @@ void CompactionJob::Prepare(
     }
 
     int64_t _current_time = 0;
-    Status s = db_options_.clock->GetCurrentTime(&_current_time);
+    Status s = immutable_db_options_.clock->GetCurrentTime(&_current_time);
     if (!s.ok()) {
       ROCKS_LOG_WARN(db_options_.info_log,
                      "Failed to get current time in compaction: Status: %s",
@@ -676,7 +679,7 @@ Status CompactionJob::Run() {
 
   const size_t num_threads = compact_->sub_compact_states.size();
   assert(num_threads > 0);
-  const uint64_t start_micros = db_options_.clock->NowMicros();
+  const uint64_t start_micros = immutable_db_options_.clock->NowMicros();
   compact_->compaction->GetOrInitInputTableProperties();
 
   // Launch a thread for each of subcompactions 1...num_threads-1
@@ -696,7 +699,7 @@ Status CompactionJob::Run() {
     thread.join();
   }
 
-  internal_stats_.SetMicros(db_options_.clock->NowMicros() - start_micros);
+  internal_stats_.SetMicros(immutable_db_options_.clock->NowMicros() - start_micros);
 
   for (auto& state : compact_->sub_compact_states) {
     internal_stats_.AddCpuMicros(state.compaction_job_stats.cpu_micros);
@@ -1158,7 +1161,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     sub_compact->compaction_job_stats.is_remote_compaction = false;
   }
 
-  uint64_t prev_cpu_micros = db_options_.clock->CPUMicros();
+  uint64_t prev_cpu_micros = immutable_db_options_.clock->CPUMicros();
 
   ColumnFamilyData* cfd = sub_compact->compaction->column_family_data();
 
@@ -1326,7 +1329,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       compaction_filter, db_options_.info_log.get(),
       false /* internal key corruption is expected */,
       job_context_->GetLatestSnapshotSequence(), job_context_->snapshot_checker,
-      compact_->compaction->level(), db_options_.stats);
+      compact_->compaction->level(),immutable_db_options_.stats);
 
   const auto& mutable_cf_options =
       sub_compact->compaction->mutable_cf_options();
@@ -1411,7 +1414,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       c_iter->ResetRecordCounts();
       RecordCompactionIOStats();
 
-      uint64_t cur_cpu_micros = db_options_.clock->CPUMicros();
+      uint64_t cur_cpu_micros = immutable_db_options_.clock->CPUMicros();
       assert(cur_cpu_micros >= last_cpu_micros);
       RecordTick(stats_, COMPACTION_CPU_TOTAL_TIME,
                  cur_cpu_micros - last_cpu_micros);
@@ -1551,7 +1554,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     sub_compact->Current().UpdateBlobStats();
   }
 
-  uint64_t cur_cpu_micros = db_options_.clock->CPUMicros();
+  uint64_t cur_cpu_micros = immutable_db_options_.clock->CPUMicros();
   sub_compact->compaction_job_stats.cpu_micros =
       cur_cpu_micros - prev_cpu_micros;
   RecordTick(stats_, COMPACTION_CPU_TOTAL_TIME,
@@ -1715,7 +1718,7 @@ Status CompactionJob::FinishCompactionOutputFile(
   }
 
   // Finish and check for file errors
-  IOStatus io_s = outputs.WriterSyncClose(s, db_options_.clock, stats_,
+  IOStatus io_s = outputs.WriterSyncClose(s, immutable_db_options_.clock, stats_,
                                           db_options_.use_fsync);
 
   if (s.ok() && io_s.ok()) {
@@ -1939,7 +1942,10 @@ if (FLAGS_warmup_after_evict) {
           warmup_read_options,
           cfd_->internal_comparator(),
           env_options_,
-          db_options_.info_log.get());
+          db_options_.info_log.get(),
+          file_options_for_compaction_,
+          mutable_cf_options_
+);
         break;
       }
     }
@@ -2033,7 +2039,7 @@ Status CompactionJob::OpenCompactionOutputFile(SubcompactionState* sub_compact,
 
   // Try to figure out the output file's oldest ancester time.
   int64_t temp_current_time = 0;
-  auto get_time_status = db_options_.clock->GetCurrentTime(&temp_current_time);
+  auto get_time_status = immutable_db_options_.clock->GetCurrentTime(&temp_current_time);
   // Safe to proceed even if GetCurrentTime fails. So, log and proceed.
   if (!get_time_status.ok()) {
     ROCKS_LOG_WARN(db_options_.info_log,
@@ -2099,8 +2105,8 @@ Status CompactionJob::OpenCompactionOutputFile(SubcompactionState* sub_compact,
   const auto& listeners =
       sub_compact->compaction->immutable_options().listeners;
   outputs.AssignFileWriter(new WritableFileWriter(
-      std::move(writable_file), fname, fo_copy, db_options_.clock, io_tracer_,
-      db_options_.stats, Histograms::SST_WRITE_MICROS, listeners,
+      std::move(writable_file), fname, fo_copy, immutable_db_options_.clock, io_tracer_,
+      immutable_db_options_.stats, Histograms::SST_WRITE_MICROS, listeners,
       db_options_.file_checksum_gen_factory.get(),
       tmp_set.Contains(FileType::kTableFile), false));
 

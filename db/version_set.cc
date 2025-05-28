@@ -7617,13 +7617,28 @@ void MaybeWarmupBlockCacheForEvictedRange(Version* current_version,
                                            const ReadOptions& base_read_options,
                                            const InternalKeyComparator& icmp,
                                            const EnvOptions& env_options,
-                                           Logger* info_log) {
-    std::cout << "[Warmup] Start warm-up for evicted range [" 
-          << smallest.DebugString() << ", " 
-          << largest.DebugString() << "]" << std::endl;
+                                           Logger* info_log,
+					   const FileOptions& file_options,
+					   const MutableCFOptions& mutable_cf_options) {
+   
+    (void)env_options;
+    TableCache::TypedHandle* handle = nullptr; 
+    Arena arena;
+    std::cout << "[WARMUP] smallest: " << smallest.DebugString(false, nullptr) << std::endl; 
+    std::cout << "[WARMUP] largest: " << largest.DebugString(false, nullptr) << std::endl;
+    std::cout << "[WARMUP] comparison result: " << icmp.Compare(largest, smallest) << std::endl;
 
-    for (int level = 0; level < current_version->NumberLevels(); ++level) {
-        const auto& files = current_version->files_[level];
+    ROCKS_LOG_INFO(info_log,
+               "[WARMUP] Start warmup for evicted range: [%s] ~ [%s]",
+               smallest.DebugString(true).c_str(),
+               largest.DebugString(true).c_str());
+
+    std::cout << "[Warmup] Start warm-up for evicted range [" 
+          << smallest.DebugString(false, nullptr) << ", " 
+          << largest.DebugString(false, nullptr) << "]" << std::endl;
+
+    for (int level = 0; level < current_version->storage_info()->num_levels(); ++level) {
+        const auto& files = current_version->storage_info()->LevelFiles(level);
         for (auto* f : files) {
             if (icmp.Compare(f->largest, smallest) < 0 || icmp.Compare(f->smallest, largest) > 0) {
                 continue; // 범위 겹치지 않음
@@ -7631,26 +7646,38 @@ void MaybeWarmupBlockCacheForEvictedRange(Version* current_version,
 
             FileDescriptor fd = f->fd;
             TableReader* table_reader = nullptr;
-            Status s = table_cache->FindTable(base_read_options,
-                                              fd.GetNumber(),
-                                              fd.GetFileSize(),
-                                              f->smallest.user_key().ToString(),
-                                              &table_reader,
-                                              nullptr);
+            const ReadOptions& ro = base_read_options;
+            ReadOptions ro_copy = base_read_options;
+            ro_copy.fill_cache = true;
+
+            Status s = table_cache->FindTable(ro, file_options, icmp, *f, &handle,
+                                  mutable_cf_options, /*skip_filters=*/false,
+                                  /*level_histogram=*/nullptr,
+                                  /*for_compaction=*/false,
+                                  /*level=*/level,
+                                  /*force_table_reader_creation=*/false,
+                                  /*file_read_cost=*/0,
+                                  Temperature::kUnknown);
+
             if (!s.ok() || table_reader == nullptr) {
                 ROCKS_LOG_WARN(info_log, "[Warmup] Failed to load table reader for file #%lu", fd.GetNumber());
                 continue;
             }
 
-            ReadOptions ro = base_read_options;
-            ro.fill_cache = true;
-            std::unique_ptr<InternalIterator> iter(table_reader->NewIterator(ro));
+
+            ro_copy.fill_cache = true;
+            std::unique_ptr<InternalIterator> iter(
+            table_reader->NewIterator(ro_copy, nullptr,  &arena, false,
+                              TableReaderCaller::kCompaction, 0,
+                              /*for_compaction=*/true));
+
 
             size_t count = 0;
             for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
                 const Slice& ikey = iter->key();
-                if (icmp.Compare(InternalKey(ikey, kTypeValue), smallest) >= 0 &&
-                    icmp.Compare(InternalKey(ikey, kTypeValue), largest) <= 0) {
+		InternalKey internal_key(ikey, kMaxSequenceNumber, kTypeValue);
+                if (icmp.Compare(internal_key, smallest) >= 0 &&
+                    icmp.Compare(internal_key, largest) <= 0) {
                     ++count;
                     continue; // blockcache에 올라감
                 }

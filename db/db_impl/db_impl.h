@@ -197,6 +197,8 @@ class DBImpl : public DB {
   DBImpl(const DBOptions& options, const std::string& dbname,
          const bool seq_per_batch = false, const bool batch_per_txn = true,
          bool read_only = false);
+
+
   // No copying allowed
   DBImpl(const DBImpl&) = delete;
   void operator=(const DBImpl&) = delete;
@@ -1339,6 +1341,7 @@ class DBImpl : public DB {
     }
 
    private:
+
     // Conditional variable and mutex to block and
     // signal the DB during stalling process.
     port::Mutex state_mutex_;
@@ -1354,6 +1357,12 @@ class DBImpl : public DB {
   bool seq_per_batch() const { return seq_per_batch_; }
 
  protected:
+  BlobFileCompletionCallback blob_callback_;
+  int bg_compaction_scheduled_ = 0;
+  int bg_bottom_compaction_scheduled_ = 0;
+  std::shared_ptr<Cache> block_cache_; 
+  EnvOptions env_options_;
+  DBOptions db_options_;
   const std::string dbname_;
   // TODO(peterd): unify with VersionSet::db_id_
   std::string db_id_;
@@ -1713,7 +1722,7 @@ class DBImpl : public DB {
                                           log::Reader::Reporter& reporter,
                                           Status& status, bool& stop_replay,
                                           WriteBatch& batch);
-
+  
  private:
   friend class DB;
   friend class ErrorHandler;
@@ -2999,10 +3008,10 @@ class DBImpl : public DB {
 
   // count how many background compactions are running or have been scheduled in
   // the BOTTOM pool
-  int bg_bottom_compaction_scheduled_ = 0;
+  //int bg_bottom_compaction_scheduled_ = 0;
 
   // count how many background compactions are running or have been scheduled
-  int bg_compaction_scheduled_ = 0;
+  //int bg_compaction_scheduled_ = 0;
 
   // stores the number of compactions are currently running
   int num_running_compactions_ = 0;
@@ -3144,7 +3153,7 @@ class DBImpl : public DB {
   bool wal_in_db_path_;
   std::atomic<uint64_t> max_total_wal_size_;
 
-  BlobFileCompletionCallback blob_callback_;
+  //BlobFileCompletionCallback blob_callback_;
 
   // Pointer to WriteBufferManager stalling interface.
   std::unique_ptr<StallInterface> wbm_stall_;

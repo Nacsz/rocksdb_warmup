@@ -1513,8 +1513,9 @@ Status DBImpl::CompactFilesImpl(
   assert(is_snapshot_supported_ || snapshots_.empty());
   CompactionJobStats compaction_job_stats;
   CompactionJob compaction_job(
-      job_context->job_id, c.get(), immutable_db_options_, mutable_db_options_,
-      file_options_for_compaction_, versions_.get(), &shutting_down_,
+      job_context->job_id, c.get(), db_options_,  immutable_db_options_,
+      block_cache_,  mutable_db_options_,
+      file_options_for_compaction_, versions_.get(), &shutting_down_, env_options_,
       log_buffer, directories_.GetDbDir(),
       GetDataDir(c->column_family_data(), c->output_path_id()),
       GetDataDir(c->column_family_data(), 0), stats_, &mutex_, &error_handler_,
@@ -1522,7 +1523,10 @@ Status DBImpl::CompactFilesImpl(
       c->mutable_cf_options().paranoid_file_checks,
       c->mutable_cf_options().report_bg_io_stats, dbname_,
       &compaction_job_stats, Env::Priority::USER, io_tracer_,
-      kManualCompactionCanceledFalse_, db_id_, db_session_id_,
+      kManualCompactionCanceledFalse_,
+      c->column_family_data()->ioptions(),
+      c->column_family_data()->GetLatestMutableCFOptions(),
+      db_id_, db_session_id_,
       c->column_family_data()->GetFullHistoryTsLow(), c->trim_ts(),
       &blob_callback_, &bg_compaction_scheduled_,
       &bg_bottom_compaction_scheduled_);
@@ -4135,9 +4139,10 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
     assert(is_snapshot_supported_ || snapshots_.empty());
 
     CompactionJob compaction_job(
-        job_context->job_id, c.get(), immutable_db_options_,
+        job_context->job_id, c.get(), db_options_, immutable_db_options_,
+        block_cache_,
         mutable_db_options_, file_options_for_compaction_, versions_.get(),
-        &shutting_down_, log_buffer, directories_.GetDbDir(),
+        &shutting_down_, env_options_, log_buffer, directories_.GetDbDir(),
         GetDataDir(c->column_family_data(), c->output_path_id()),
         GetDataDir(c->column_family_data(), 0), stats_, &mutex_,
         &error_handler_, job_context, table_cache_, &event_logger_,
@@ -4146,6 +4151,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         &compaction_job_stats, thread_pri, io_tracer_,
         is_manual ? manual_compaction->canceled
                   : kManualCompactionCanceledFalse_,
+        c->column_family_data()->ioptions(),
+        c->column_family_data()->GetLatestMutableCFOptions(),
         db_id_, db_session_id_, c->column_family_data()->GetFullHistoryTsLow(),
         c->trim_ts(), &blob_callback_, &bg_compaction_scheduled_,
         &bg_bottom_compaction_scheduled_);

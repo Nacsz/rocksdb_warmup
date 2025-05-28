@@ -1,5 +1,6 @@
 //  Copyright (c) Meta Platforms, Inc. and affiliates.
 //
+//
 //  This source code is licensed under both the GPLv2 (found in the
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
@@ -299,29 +300,48 @@ void CompactionServiceCompactionJob::RecordCompactionIOStats() {
 }
 
 CompactionServiceCompactionJob::CompactionServiceCompactionJob(
-    int job_id, Compaction* compaction, const ImmutableDBOptions& db_options,
+    int job_id, Compaction* compaction, 
+    const DBOptions& db_options,
+    const ImmutableDBOptions& immutable_db_options,
+    std::shared_ptr<Cache> input_block_cache,
     const MutableDBOptions& mutable_db_options, const FileOptions& file_options,
     VersionSet* versions, const std::atomic<bool>* shutting_down,
-    LogBuffer* log_buffer, FSDirectory* output_directory, Statistics* stats,
+    const EnvOptions& env_options, 
+    LogBuffer* log_buffer,
+    FSDirectory* db_directory,
+    FSDirectory* output_directory,
+    FSDirectory* blob_output_directory,   
+    Statistics* stats,
     InstrumentedMutex* db_mutex, ErrorHandler* db_error_handler,
     JobContext* job_context, std::shared_ptr<Cache> table_cache,
     EventLogger* event_logger, const std::string& dbname,
     const std::shared_ptr<IOTracer>& io_tracer,
     const std::atomic<bool>& manual_compaction_canceled,
+    const ImmutableCFOptions& immutable_cf_options,
+    const MutableCFOptions& mutable_cf_options, 
     const std::string& db_id, const std::string& db_session_id,
+    std::string full_history_ts_low, std::string trim_ts,
+    BlobFileCompletionCallback* blob_callback,
+    int* bg_compaction_scheduled,
+    int* bg_bottom_compaction_scheduled,
     std::string output_path,
     const CompactionServiceInput& compaction_service_input,
     CompactionServiceResult* compaction_service_result)
-    : CompactionJob(job_id, compaction, db_options, mutable_db_options,
-                    file_options, versions, shutting_down, log_buffer, nullptr,
-                    output_directory, nullptr, stats, db_mutex,
+    : CompactionJob(job_id, compaction, db_options, immutable_db_options, 
+		    input_block_cache, mutable_db_options,
+                    file_options, versions, shutting_down, env_options, 
+		    log_buffer, db_directory,
+                    output_directory, blob_output_directory, stats, db_mutex,
                     db_error_handler, job_context, std::move(table_cache),
                     event_logger,
                     compaction->mutable_cf_options().paranoid_file_checks,
                     compaction->mutable_cf_options().report_bg_io_stats, dbname,
                     &(compaction_service_result->stats), Env::Priority::USER,
-                    io_tracer, manual_compaction_canceled, db_id, db_session_id,
-                    compaction->column_family_data()->GetFullHistoryTsLow()),
+                    io_tracer, manual_compaction_canceled,
+                    immutable_cf_options, mutable_cf_options, db_id, db_session_id,
+                    std::move(full_history_ts_low), std::move(trim_ts),
+                    blob_callback, bg_compaction_scheduled,
+                    bg_bottom_compaction_scheduled),
       output_path_(std::move(output_path)),
       compaction_input_(compaction_service_input),
       compaction_result_(compaction_service_result) {}
@@ -349,7 +369,7 @@ Status CompactionServiceCompactionJob::Run() {
 
   compaction_result_->stats.Reset();
 
-  const uint64_t start_micros = db_options_.clock->NowMicros();
+  const uint64_t start_micros = immutable_db_options_.clock->NowMicros();
   c->GetOrInitInputTableProperties();
 
   // Pick the only sub-compaction we should have
@@ -358,7 +378,7 @@ Status CompactionServiceCompactionJob::Run() {
 
   ProcessKeyValueCompaction(sub_compact);
 
-  uint64_t elapsed_micros = db_options_.clock->NowMicros() - start_micros;
+  uint64_t elapsed_micros = immutable_db_options_.clock->NowMicros() - start_micros;
   internal_stats_.SetMicros(elapsed_micros);
   internal_stats_.AddCpuMicros(elapsed_micros);
 

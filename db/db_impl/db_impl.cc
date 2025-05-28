@@ -168,7 +168,15 @@ void DumpSupportInfo(Logger* logger) {
 DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
                const bool seq_per_batch, const bool batch_per_txn,
                bool read_only)
-    : dbname_(dbname),
+    : 
+      blob_callback_(immutable_db_options_.sst_file_manager.get(), &mutex_,
+                     &error_handler_, &event_logger_,
+                     immutable_db_options_.listeners, dbname_),
+
+      block_cache_(options.row_cache),
+      env_options_(EnvOptions(options)), 
+      db_options_(options),
+      dbname_(dbname),
       own_info_log_(options.info_log == nullptr),
       initial_db_options_(SanitizeOptions(dbname, options, read_only,
                                           &init_logger_creation_s_)),
@@ -178,6 +186,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       fs_(immutable_db_options_.fs, io_tracer_),
       mutable_db_options_(initial_db_options_),
       stats_(immutable_db_options_.stats),
+      
 #ifdef COERCE_CONTEXT_SWITCH
       mutex_(stats_, immutable_db_options_.clock, DB_MUTEX_WAIT_MICROS, &bg_cv_,
              immutable_db_options_.use_adaptive_mutex),
@@ -220,14 +229,17 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       // as well.
       use_custom_gc_(seq_per_batch),
       own_sfm_(options.sst_file_manager == nullptr),
-      atomic_flush_install_cv_(&mutex_),
-      blob_callback_(immutable_db_options_.sst_file_manager.get(), &mutex_,
-                     &error_handler_, &event_logger_,
-                     immutable_db_options_.listeners, dbname_) {
+    
+     
+   
+      atomic_flush_install_cv_(&mutex_)
+
+ {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);
 
+      
   // Reserve ten files or so for other uses and give the rest to TableCache.
   // Give a large number for setting of "infinite" open files.
   const int table_cache_size = (mutable_db_options_.max_open_files == -1)

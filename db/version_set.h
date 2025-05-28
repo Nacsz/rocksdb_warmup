@@ -1750,7 +1750,9 @@ void MaybeWarmupBlockCacheForEvictedRange(
     const ReadOptions& base_read_options,
     const InternalKeyComparator& icmp,
     const EnvOptions& env_options,
-    Logger* info_log);
+    Logger* info_log,
+    const FileOptions& file_options,
+    const MutableCFOptions& mutable_cf_options);
 
 
 // ReactiveVersionSet represents a collection of versions of the column

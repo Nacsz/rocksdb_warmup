@@ -145,7 +145,7 @@ class CompactionJob {
   CompactionJob(int job_id, Compaction* compaction,
 		const DBOptions& db_options,
                 const ImmutableDBOptions& immutable_db_options,
-		std::shared_ptr<Cache> block_cache,
+		std::shared_ptr<Cache> input_block_cache,
                 const MutableDBOptions& mutable_db_options,
                 const FileOptions& file_options, VersionSet* versions,
                 const std::atomic<bool>* shutting_down,
@@ -160,8 +160,9 @@ class CompactionJob {
                 CompactionJobStats* compaction_job_stats,
                 Env::Priority thread_pri,
                 const std::shared_ptr<IOTracer>& io_tracer,
-                const std::atomic<bool>& manual_compaction_canceled,
+		const std::atomic<bool>& manual_compaction_canceled,
 		const ImmutableCFOptions& immutable_cf_options,
+		const MutableCFOptions& mutable_cf_options,
                 const std::string& db_id = "",
                 const std::string& db_session_id = "",
                 std::string full_history_ts_low = "", std::string trim_ts = "",
@@ -201,6 +202,10 @@ class CompactionJob {
   IOStatus io_status() const { return io_status_; }
 
  protected:
+  FileOptions file_options_for_compaction_;
+  MutableCFOptions mutable_cf_options_;
+  const DBOptions& db_options_;
+  const ImmutableDBOptions& immutable_db_options_;
   void UpdateCompactionJobOutputStats(
       const InternalStats::CompactionStatsFull& internal_stats) const;
 
@@ -227,10 +232,9 @@ class CompactionJob {
   CompactionJobStats* job_stats_;
 
  private:
-  const DBOptions& db_options_;
-  const ImmutableDBOptions& immutable_db_options_;
+  //const DBOptions& db_options_;
+  //const ImmutableDBOptions& immutable_db_options_;
   std::shared_ptr<Cache> block_cache_;
-  const std::atomic<bool>& manual_compaction_calceled_;
   friend class CompactionJobTestBase;
   ColumnFamilyData* cfd_;
   EnvOptions env_options_;
@@ -503,7 +507,8 @@ struct CompactionServiceResult {
   // per-level stats become possible in the future, consider deprecating this
   // field.
   CompactionJobStats stats;
-
+  
+  InternalStats::CompactionStatsFull internal_stats;
   // Per-level Compaction Stats for both output_level_stats and
   // proximal_level_stats
 
@@ -523,17 +528,31 @@ struct CompactionServiceResult {
 class CompactionServiceCompactionJob : private CompactionJob {
  public:
   CompactionServiceCompactionJob(
-      int job_id, Compaction* compaction, const ImmutableDBOptions& db_options,
+      int job_id, Compaction* compaction,
+      const DBOptions& db_options,
+      const ImmutableDBOptions& immutable_db_options,
+      std::shared_ptr<Cache> input_block_cache,
       const MutableDBOptions& mutable_db_options,
       const FileOptions& file_options, VersionSet* versions,
-      const std::atomic<bool>* shutting_down, LogBuffer* log_buffer,
-      FSDirectory* output_directory, Statistics* stats,
+      const std::atomic<bool>* shutting_down,
+      const EnvOptions& env_options,  
+      LogBuffer* log_buffer,
+      FSDirectory* db_directory, 
+      FSDirectory* output_directory,
+      FSDirectory* blob_output_directory, 
+      Statistics* stats,
       InstrumentedMutex* db_mutex, ErrorHandler* db_error_handler,
       JobContext* job_context, std::shared_ptr<Cache> table_cache,
       EventLogger* event_logger, const std::string& dbname,
       const std::shared_ptr<IOTracer>& io_tracer,
       const std::atomic<bool>& manual_compaction_canceled,
+      const ImmutableCFOptions& immutable_cf_options,
+      const MutableCFOptions& mutable_cf_options,
       const std::string& db_id, const std::string& db_session_id,
+      std::string full_history_ts_low, std::string trim_ts,
+      BlobFileCompletionCallback* blob_callback,
+      int* bg_compaction_scheduled,
+      int* bg_bottom_compaction_scheduled,
       std::string output_path,
       const CompactionServiceInput& compaction_service_input,
       CompactionServiceResult* compaction_service_result);
