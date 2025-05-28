@@ -21,6 +21,7 @@ struct ImmutableDBOptions {
   void Dump(Logger* log) const;
 
   bool create_if_missing;
+  bool warmup_after_delete;
   bool create_missing_column_families;
   bool error_if_exists;
   bool paranoid_checks;

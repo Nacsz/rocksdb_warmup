@@ -1760,6 +1760,8 @@ DEFINE_bool(read_with_latest_user_timestamp, true,
 DEFINE_string(cache_uri, "", "Full URI for creating a custom cache object");
 DEFINE_string(secondary_cache_uri, "",
               "Full URI for creating a custom secondary cache object");
+DEFINE_bool(warmup_after_delete, false, "Warm-up block cache after SST eviction due to compaction");
+
 static class std::shared_ptr<ROCKSDB_NAMESPACE::SecondaryCache> secondary_cache;
 
 static const bool FLAGS_prefix_size_dummy __attribute__((__unused__)) =
@@ -4229,7 +4231,8 @@ class Benchmark {
     config_options.ignore_unsupported_options = false;
 
     assert(db_.db == nullptr);
-
+    printf("warmup = %d\n", FLAGS_warmup_after_delete);
+    options.warmup_after_delete = FLAGS_warmup_after_delete;
     options.env = FLAGS_env;
     options.wal_dir = FLAGS_wal_dir;
     options.dump_malloc_stats = FLAGS_dump_malloc_stats;

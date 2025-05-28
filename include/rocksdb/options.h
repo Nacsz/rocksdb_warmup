@@ -684,6 +684,7 @@ struct DBOptions {
   //
   // Default: false
   bool track_and_verify_wals = false;
+  bool warmup_after_delete = false;
 
   // If true, verifies the SST unique id between MANIFEST and actual file
   // each time an SST file is opened. This check ensures an SST file is not
