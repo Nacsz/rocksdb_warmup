@@ -291,6 +291,7 @@ class CompactionJob {
                                     const Slice* comp_start_user_key,
                                     const Slice* comp_end_user_key);
   Status InstallCompactionResults(bool* compaction_released);
+  void WarmupDeletedFiles();
   Status OpenCompactionOutputFile(SubcompactionState* sub_compact,
                                   CompactionOutputs& outputs);
 

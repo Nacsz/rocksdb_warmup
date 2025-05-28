@@ -1898,11 +1898,106 @@ Status CompactionJob::InstallCompactionResults(bool* compaction_released) {
     *compaction_released = true;
   };
 
+  fprintf(stdout, "warmup flag = [%d]\n", db_options_.warmup_after_delete);
+  if(db_options_.warmup_after_delete) WarmupDeletedFiles();
+
   return versions_->LogAndApply(compaction->column_family_data(), read_options,
                                 write_options, edit, db_mutex_, db_directory_,
                                 /*new_descriptor_log=*/false,
                                 /*column_family_options=*/nullptr,
                                 manifest_wcb);
+}
+
+void CompactionJob::WarmupDeletedFiles() {
+  Compaction* compaction = compact_->compaction;
+  VersionEdit* const edit = compaction->edit();
+
+  // fill_cache = true → Get()/Iter 가 읽는 블록은 모두 block-cache 로 들어감
+  ReadOptions warmup_ro;
+  warmup_ro.fill_cache = true;
+
+  // ---------------------------------------------------------------------------
+  // 1) 현재 Version / StorageInfo 로부터 메타데이터 조회
+  // ---------------------------------------------------------------------------
+  auto* cur_version     = compaction->input_version();
+  auto* storage_info    = cur_version->storage_info();
+  ColumnFamilyData* cfd = compaction->column_family_data();
+  const InternalKeyComparator& icmp = cfd->internal_comparator();
+
+  // ---------------------------------------------------------------------------
+  // 2) “삭제 대상” SST(번호) => FileMetaData* 로 역참조
+  // ---------------------------------------------------------------------------
+  for (const auto& deleted : edit->GetDeletedFiles()) {
+    // int level              = deleted.first;     // 삭제 대상 레벨
+    uint64_t file_number   = deleted.second;    // 삭제될 SST 번호
+
+    FileMetaData* victim = storage_info->GetFileMetaDataByNumber(file_number);
+    if (victim == nullptr) {
+      // 이미 obsolete 이거나 다른 스레드에서 정리되었을 수 있음
+      fprintf(stdout, "victim이 nullptr입니다.\n");
+      continue;
+    }
+    fprintf(stdout, "victim: %ld\n", file_number);
+
+
+    // victim SST 가 담당하던 key-range
+    const Slice smallest_user = victim->smallest.user_key();
+    const Slice largest_user  = victim->largest.user_key();
+
+    // -----------------------------------------------------------------------
+    // 3) 현재 모든 파일 중, victim 과 key-range 가 겹치는 파일을 찾는다
+    // -----------------------------------------------------------------------
+    std::vector<FileMetaData*> target_files;
+
+    int num_levels = storage_info->num_levels();
+    for (int level = 0; level < num_levels; ++level) {
+      const auto& files = storage_info->LevelFiles(level);
+      for (auto* f : files) {
+        if (f->fd.GetNumber() == file_number) continue;  // 본인 제외
+
+        if (icmp.user_comparator()->Compare(f->largest.user_key(), smallest_user) < 0) continue;
+        if (icmp.user_comparator()->Compare(f->smallest.user_key(), largest_user) > 0) continue;
+
+        target_files.push_back(f);
+      }
+    }
+
+    if (target_files.empty()) {
+      continue;
+    }
+
+    // 4) victim SST 의 모든 key를 cache에 올린다.
+    FileOptions file_options;
+    file_options.use_mmap_reads = false;
+    file_options.use_mmap_writes = false;
+
+    InternalIterator* v_iter = cfd->table_cache()->NewIterator(
+            warmup_ro, file_options, icmp,
+            *victim, /*range_del_agg=*/nullptr,
+            compaction->mutable_cf_options(),
+            /*table_reader_ptr=*/nullptr,
+            /*Hist=*/nullptr,
+            TableReaderCaller::kCompactionRefill,
+            /*arena=*/nullptr,
+            /*skip_filters=*/false,
+            compaction->output_level(),
+            MaxFileSizeForL0MetaPin(compaction->mutable_cf_options()),
+            /*smallest_compaction_key=*/nullptr,
+            /*largest_compaction_key=*/nullptr,
+            /*allow_unprepared_value=*/false);
+
+    if (!v_iter) continue;
+    fprintf(stdout, "[v_iter]\n");
+
+    v_iter->SeekToFirst();
+    for (v_iter->SeekToFirst(); v_iter->Valid(); v_iter->Next()) {
+      // 키를 읽기만 하면 block cache에 로딩됨 (fill_cache=true)
+      Slice key = v_iter->key();
+      Slice value = v_iter->value();  // value도 읽어야 실제 block load됨
+      (void)key;  // unused warning 방지
+      (void)value;
+    }
+  }
 }
 
 void CompactionJob::RecordCompactionIOStats() {
