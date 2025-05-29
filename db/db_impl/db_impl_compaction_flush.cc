@@ -215,7 +215,7 @@ Status DBImpl::FlushMemTableToOutputFile(
       &event_logger_, mutable_cf_options.report_bg_io_stats,
       true /* sync_output_directory */, true /* write_manifest */, thread_pri,
       io_tracer_, cfd->GetSuperVersion()->ShareSeqnoToTimeMapping(), db_id_,
-      db_session_id_, cfd->GetFullHistoryTsLow(), &blob_callback_);
+      db_session_id_, cfd->GetFullHistoryTsLow(), blob_callback_.get());
   FileMetaData file_meta;
 
   Status s;
@@ -481,7 +481,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
         false /* sync_output_directory */, false /* write_manifest */,
         thread_pri, io_tracer_,
         cfd->GetSuperVersion()->ShareSeqnoToTimeMapping(), db_id_,
-        db_session_id_, cfd->GetFullHistoryTsLow(), &blob_callback_));
+        db_session_id_, cfd->GetFullHistoryTsLow(), blob_callback_.get()));
   }
 
   std::vector<FileMetaData> file_meta(num_cfs);
@@ -1528,7 +1528,7 @@ Status DBImpl::CompactFilesImpl(
       c->column_family_data()->GetLatestMutableCFOptions(),
       db_id_, db_session_id_,
       c->column_family_data()->GetFullHistoryTsLow(), c->trim_ts(),
-      &blob_callback_, &bg_compaction_scheduled_,
+      blob_callback_.get(), &bg_compaction_scheduled_,
       &bg_bottom_compaction_scheduled_);
 
   // Creating a compaction influences the compaction score because the score
@@ -4154,7 +4154,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         c->column_family_data()->ioptions(),
         c->column_family_data()->GetLatestMutableCFOptions(),
         db_id_, db_session_id_, c->column_family_data()->GetFullHistoryTsLow(),
-        c->trim_ts(), &blob_callback_, &bg_compaction_scheduled_,
+        c->trim_ts(), blob_callback_.get(), &bg_compaction_scheduled_,
         &bg_bottom_compaction_scheduled_);
     compaction_job.Prepare(std::nullopt /*subcompact to be computed*/);
 

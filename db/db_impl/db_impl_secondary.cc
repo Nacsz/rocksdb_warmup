@@ -954,7 +954,7 @@ Status DBImplSecondary::CompactWithoutInstallation(
       input.db_id, db_session_id_,
       c->column_family_data()->GetFullHistoryTsLow(), // string
       c->trim_ts(),                  // string
-      &blob_callback_,               // BlobFileCompletionCallback*
+      blob_callback_.get(),               // BlobFileCompletionCallback*
       &bg_compaction_scheduled_,    // int*
       &bg_bottom_compaction_scheduled_,
       secondary_path_, input, result);

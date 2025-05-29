@@ -1823,6 +1823,8 @@ Status CompactionJob::FinishCompactionOutputFile(
 }
 
 Status CompactionJob::InstallCompactionResults(bool* compaction_released) {
+ fprintf(stderr, "[WARMUP DEBUG] InstallCompactionResults() called for JOB %d\n", job_id_);
+
   assert(compact_);
 
   db_mutex_->AssertHeld();
@@ -1856,6 +1858,8 @@ Status CompactionJob::InstallCompactionResults(bool* compaction_released) {
 
   VersionEdit* const edit = compaction->edit();
   assert(edit);
+
+
 
   // Add compaction inputs
   compaction->AddInputDeletions(edit);
@@ -1911,17 +1915,13 @@ Status CompactionJob::InstallCompactionResults(bool* compaction_released) {
     *compaction_released = true;
   };
 
-  return versions_->LogAndApply(compaction->column_family_data(), read_options,
-                                write_options, edit, db_mutex_, db_directory_,
-                                /*new_descriptor_log=*/false,
-                                /*column_family_options=*/nullptr,
-                                manifest_wcb);
 
 
-ReadOptions warmup_read_options;
-warmup_read_options.fill_cache = true;
+  ReadOptions warmup_read_options;
+  warmup_read_options.fill_cache = true;
 
-if (FLAGS_warmup_after_evict) {
+if (true) {
+  fprintf(stderr, "[WARMUP DEBUG] warmup() called for JOB %d\n", job_id_);
   auto* current_version = cfd_->current();
   auto* storage_info = current_version->storage_info();
 
@@ -1955,8 +1955,12 @@ if (FLAGS_warmup_after_evict) {
     }
   }
 }
+ return versions_->LogAndApply(compaction->column_family_data(), read_options,
+                                write_options, edit, db_mutex_, db_directory_,
+                                /*new_descriptor_log=*/false,
+                                /*column_family_options=*/nullptr,
+                                manifest_wcb);
 
-return Status::OK();
 }
 
 void CompactionJob::RecordCompactionIOStats() {

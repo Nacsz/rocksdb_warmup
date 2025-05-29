@@ -7609,7 +7609,7 @@ Status ReactiveVersionSet::MaybeSwitchManifest(
   }
   return s;
 }
-
+namespace {
 void MaybeWarmupBlockCacheForEvictedRange(Version* current_version,
                                            const InternalKey& smallest,
                                            const InternalKey& largest,
@@ -7620,7 +7620,7 @@ void MaybeWarmupBlockCacheForEvictedRange(Version* current_version,
                                            Logger* info_log,
 					   const FileOptions& file_options,
 					   const MutableCFOptions& mutable_cf_options) {
-   assert(false && "[WARMUP] warmup 함수 진입 확인용 assert");
+
 
     (void)env_options;
     TableCache::TypedHandle* handle = nullptr; 
@@ -7696,7 +7696,7 @@ void MaybeWarmupBlockCacheForEvictedRange(Version* current_version,
     }
     ROCKS_LOG_INFO(info_log, "[Warmup] Completed warm-up for range");
 }
-
+}
 
 
 #ifndef NDEBUG

@@ -1358,7 +1358,6 @@ class DBImpl : public DB {
 
  protected:
   std::vector<std::shared_ptr<EventListener>> listeners_copy;
-  std::unique_ptr<BlobFileCompletionCallback> blob_callback_;
   int bg_compaction_scheduled_ = 0;
   int bg_bottom_compaction_scheduled_ = 0;
   std::shared_ptr<Cache> block_cache_; 
@@ -1381,6 +1380,7 @@ class DBImpl : public DB {
   FileSystemPtr fs_;
   MutableDBOptions mutable_db_options_;
   Statistics* stats_;
+  std::unique_ptr<BlobFileCompletionCallback> blob_callback_;
   std::unordered_map<std::string, RecoveredTransaction*>
       recovered_transactions_;
   std::unique_ptr<Tracer> tracer_;
