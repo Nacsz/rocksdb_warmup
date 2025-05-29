@@ -1746,7 +1746,7 @@ void MaybeWarmupBlockCacheForEvictedRange(
     Version* current_version,
     const InternalKey& smallest,
     const InternalKey& largest,
-    std::shared_ptr<Cache> block_cache,
+    TableCache* table_cache,
     const ReadOptions& base_read_options,
     const InternalKeyComparator& icmp,
     const EnvOptions& env_options,

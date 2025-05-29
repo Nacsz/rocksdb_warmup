@@ -7609,7 +7609,7 @@ Status ReactiveVersionSet::MaybeSwitchManifest(
   }
   return s;
 }
-namespace {
+
 void MaybeWarmupBlockCacheForEvictedRange(Version* current_version,
                                            const InternalKey& smallest,
                                            const InternalKey& largest,
@@ -7637,10 +7637,7 @@ void MaybeWarmupBlockCacheForEvictedRange(Version* current_version,
                 << largest.DebugString(false, nullptr) << "]\n";
 
      warmup_log.close();
-    ROCKS_LOG_INFO(info_log,
-               "[WARMUP] Start warmup for evicted range: [%s] ~ [%s]",
-               smallest.DebugString(true).c_str(),
-               largest.DebugString(true).c_str());
+    
 
     std::cout << "[Warmup] Start warm-up for evicted range [" 
           << smallest.DebugString(false, nullptr) << ", " 
@@ -7653,7 +7650,7 @@ void MaybeWarmupBlockCacheForEvictedRange(Version* current_version,
                 continue; // 범위 겹치지 않음
             }
 
-            FileDescriptor fd = f->fd;
+   
             TableReader* table_reader = nullptr;
             const ReadOptions& ro = base_read_options;
             ReadOptions ro_copy = base_read_options;
@@ -7669,7 +7666,7 @@ void MaybeWarmupBlockCacheForEvictedRange(Version* current_version,
                                   Temperature::kUnknown);
 
             if (!s.ok() || table_reader == nullptr) {
-                ROCKS_LOG_WARN(info_log, "[Warmup] Failed to load table reader for file #%lu", fd.GetNumber());
+              
                 continue;
             }
 
@@ -7691,12 +7688,12 @@ void MaybeWarmupBlockCacheForEvictedRange(Version* current_version,
                     continue; // blockcache에 올라감
                 }
             }
-            ROCKS_LOG_INFO(info_log, "[Warmup] Warmed %zu entries from L%d file #%lu", count, level, fd.GetNumber());
+           
         }
     }
-    ROCKS_LOG_INFO(info_log, "[Warmup] Completed warm-up for range");
+    
 }
-}
+
 
 
 #ifndef NDEBUG

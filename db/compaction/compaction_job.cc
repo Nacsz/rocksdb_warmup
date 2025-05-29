@@ -1937,12 +1937,12 @@ if (true) {
         ROCKS_LOG_INFO(db_options_.info_log.get(), "[WARMUP DEBUG] About to call warmup with range %s ~ %s",
                smallest.DebugString(true).c_str(),
                largest.DebugString(true).c_str());
-
+       auto* table_cache = cfd_->table_cache();
         MaybeWarmupBlockCacheForEvictedRange(
           current_version,
           smallest,
           largest,
-          block_cache,
+          table_cache,
           warmup_read_options,
           cfd_->internal_comparator(),
           env_options_,
