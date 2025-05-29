@@ -1923,14 +1923,36 @@ Status CompactionJob::InstallCompactionResults(bool* compaction_released) {
 if (true) {
   fprintf(stderr, "[WARMUP DEBUG] warmup() called for JOB %d\n", job_id_);
   auto* current_version = cfd_->current();
+  if (!current_version) {
+    fprintf(stderr, "[WARMUP ERROR] current_version is nullptr\n");
+    return Status::OK();
+  }
   auto* storage_info = current_version->storage_info();
-
+  if (!storage_info) {
+    fprintf(stderr, "[WARMUP ERROR] storage_info is nullptr\n");
+    return Status::OK();
+  }
   for (const auto& f : edit->GetDeletedFiles()) {
     int level = f.first;
     uint64_t file_number = f.second;
+    fprintf(stderr, "[WARMUP DEBUG] Deleted file — Level: %d, FileNum: %lu\n", level, file_number);
+    if (level < 0 || level >= storage_info->num_levels()) {
+      fprintf(stderr, "[WARMUP ERROR] Invalid level %d (max: %d)\n", level, storage_info->num_levels() - 1);
+      continue;
+    }
 
     const auto& files = storage_info->LevelFiles(level);
+    if (files.empty()) {
+      fprintf(stderr, "[WARMUP WARN] Level %d has no files\n", level);
+      continue;
+    }
+
     for (auto* file : files) {
+      if (!file) {
+        fprintf(stderr, "[WARMUP WARN] Null FileMetaData in Level %d\n", level);
+        continue;
+      }
+
       if (file->fd.GetNumber() == file_number) {
         const InternalKey& smallest = file->smallest;
         const InternalKey& largest = file->largest;
@@ -1938,6 +1960,10 @@ if (true) {
                smallest.DebugString(true).c_str(),
                largest.DebugString(true).c_str());
        auto* table_cache = cfd_->table_cache();
+       if (!table_cache) {
+          fprintf(stderr, "[WARMUP ERROR] table_cache is nullptr\n");
+          continue;
+        }
         MaybeWarmupBlockCacheForEvictedRange(
           current_version,
           smallest,
